@@ -1,0 +1,8 @@
+[project]
+name = "ciee-vagas"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.13"
+dependencies = [
+    "selenium>=4.38.0",
+]
