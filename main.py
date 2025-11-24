@@ -12,7 +12,7 @@ from datetime import datetime
 class CIEEScraper:
     """Scraper para buscar vagas no portal CIEE"""
 
-    def __init__(self, headless=False):
+    def __init__(self, headless=True):
         """
         Inicializa o scraper
 
@@ -38,6 +38,58 @@ class CIEEScraper:
         self.driver = webdriver.Chrome(options=options)
         self.wait = WebDriverWait(self.driver, 10)
 
+    def _scroll_to_element(self, element):
+        """
+        Rola a página até o elemento ficar visível e centralizado
+
+        Args:
+            element: WebElement para rolar até
+        """
+        try:
+            # Rola até o elemento com ele centralizado na tela
+            self.driver.execute_script(
+                "arguments[0].scrollIntoView({behavior: 'smooth', block: 'center', inline: 'center'});",
+                element
+            )
+            time.sleep(0.8)  # Aguarda a animação de scroll
+        except Exception as e:
+            print(f"  ⚠️ Erro ao rolar até elemento: {e}")
+
+    def _scroll_to_filters_section(self):
+        """Rola a página até a seção de filtros"""
+        try:
+            print("\n🔄 Rolando até a seção de filtros...")
+
+            # Tenta encontrar a seção de filtros por diferentes seletores
+            seletores_filtros = [
+                "#TipoVaga",
+                ".filtros-busca",
+                "[class*='filter']",
+                "#NivelEnsino"
+            ]
+
+            elemento_filtro = None
+            for seletor in seletores_filtros:
+                try:
+                    elemento_filtro = self.wait.until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, seletor))
+                    )
+                    if elemento_filtro:
+                        break
+                except:
+                    continue
+
+            if elemento_filtro:
+                self._scroll_to_element(elemento_filtro)
+                print("  ✅ Rolou até os filtros!")
+            else:
+                # Se não encontrar, rola uma quantidade fixa
+                self.driver.execute_script("window.scrollBy(0, 300);")
+                time.sleep(1)
+
+        except Exception as e:
+            print(f"  ⚠️ Erro ao rolar até filtros: {e}")
+
     def acessar_site(self):
         """Acessa o site do CIEE"""
         print(f"Acessando {self.url_base}...")
@@ -55,6 +107,9 @@ class CIEEScraper:
         print("\n" + "=" * 50)
         print("APLICANDO FILTROS")
         print("=" * 50)
+
+        # Primeiro, rola até a seção de filtros
+        self._scroll_to_filters_section()
 
         # Filtro 1: Tipo de vaga
         if 'tipo_vaga' in filtros:
@@ -88,7 +143,15 @@ class CIEEScraper:
         try:
             print(f"\n🔹 Selecionando tipo de vaga: {tipo_vaga}")
 
-            # Clica no dropdown para abrir
+            # Aguarda e localiza o elemento
+            tipo_vaga_input = self.wait.until(
+                EC.presence_of_element_located((By.ID, "TipoVaga"))
+            )
+
+            # Rola até o elemento
+            self._scroll_to_element(tipo_vaga_input)
+
+            # Aguarda ficar clicável
             tipo_vaga_input = self.wait.until(
                 EC.element_to_be_clickable((By.ID, "TipoVaga"))
             )
@@ -136,7 +199,15 @@ class CIEEScraper:
         try:
             print(f"\n🔹 Selecionando nível de ensino: {nivel_ensino}")
 
-            # Clica no dropdown para abrir
+            # Aguarda e localiza o elemento
+            nivel_input = self.wait.until(
+                EC.presence_of_element_located((By.ID, "NivelEnsino"))
+            )
+
+            # Rola até o elemento
+            self._scroll_to_element(nivel_input)
+
+            # Aguarda ficar clicável e clica
             nivel_input = self.wait.until(
                 EC.element_to_be_clickable((By.ID, "NivelEnsino"))
             )
@@ -186,15 +257,18 @@ class CIEEScraper:
         try:
             print(f"\n🔹 Selecionando área profissional: {area_profissional}")
 
-            # Clica no dropdown para abrir
+            # Aguarda e localiza o elemento
+            area_input = self.wait.until(
+                EC.presence_of_element_located((By.ID, "AreaProfissional"))
+            )
+
+            # Rola até o elemento antes de clicar
+            self._scroll_to_element(area_input)
+
+            # Aguarda ficar clicável e clica
             area_input = self.wait.until(
                 EC.element_to_be_clickable((By.ID, "AreaProfissional"))
             )
-
-            # Scroll até o elemento antes de clicar
-            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", area_input)
-            time.sleep(0.5)
-
             area_input.click()
             time.sleep(1.5)
 
@@ -214,7 +288,7 @@ class CIEEScraper:
                 'GEOCIÊNCIAS': '73',
                 'GEOMÁTICA': '45',
                 'ASTRONOMIA': '10081',
-                # Adicione mais conforme necessário
+                'SAÚDE': '32',
             }
 
             # Pega o ID correto
@@ -222,13 +296,11 @@ class CIEEScraper:
 
             if not id_opcao:
                 print(f"⚠️ Área '{area_profissional}' não mapeada, tentando busca por texto...")
-                # Tenta buscar pelo texto
                 try:
                     xpath_opcao = f"//ul[@id='ComboAreaProfissional']//li[contains(text(), '{area_profissional}')]"
                     opcao = self.wait.until(
                         EC.element_to_be_clickable((By.XPATH, xpath_opcao))
                     )
-                    # Scroll na lista até o elemento
                     self.driver.execute_script("arguments[0].scrollIntoView({block: 'nearest'});", opcao)
                     time.sleep(0.3)
                     opcao.click()
@@ -236,10 +308,8 @@ class CIEEScraper:
                     print(f"❌ Não foi possível encontrar '{area_profissional}'")
                     return
             else:
-                # Aguarda a lista aparecer
                 time.sleep(0.5)
 
-                # Clica pela ID usando JavaScript como fallback
                 try:
                     opcao = self.wait.until(
                         EC.presence_of_element_located((By.ID, id_opcao))
@@ -276,7 +346,15 @@ class CIEEScraper:
         try:
             print(f"\n🔹 Selecionando cidade: {cidade}")
 
-            # Clica no campo para abrir o dropdown
+            # Aguarda e localiza o elemento
+            cidade_input = self.wait.until(
+                EC.presence_of_element_located((By.ID, "CidadeVaga"))
+            )
+
+            # Rola até o elemento
+            self._scroll_to_element(cidade_input)
+
+            # Aguarda ficar clicável e clica
             cidade_input = self.wait.until(
                 EC.element_to_be_clickable((By.ID, "CidadeVaga"))
             )
@@ -285,10 +363,9 @@ class CIEEScraper:
 
             # Digita parte do nome para filtrar as opções
             cidade_input.clear()
-            # Pega apenas a primeira palavra da cidade para facilitar a busca
             termo_busca = cidade.split()[0].upper()
             cidade_input.send_keys(termo_busca)
-            time.sleep(2)  # Aguarda filtrar
+            time.sleep(2)
 
             # Mapa de cidades conhecidas com IDs
             mapa_cidades = {
@@ -296,28 +373,24 @@ class CIEEScraper:
                 'BRASÍLIA DE MINAS - MG': '3108602',
                 'SÃO PAULO - SP': '3550308',
                 'RIO DE JANEIRO - RJ': '3304557',
-                # Adicione mais cidades conforme necessário
             }
 
             cidade_normalizada = cidade.upper().strip()
             id_cidade = mapa_cidades.get(cidade_normalizada)
 
             if id_cidade:
-                # Clica pelo ID
                 try:
                     opcao = self.wait.until(
                         EC.element_to_be_clickable((By.ID, id_cidade))
                     )
                     opcao.click()
                 except:
-                    # Se não encontrar pelo ID, tenta pelo texto
                     xpath_opcao = f"//ul[@id='ComboCidade']//li[contains(text(), '{cidade_normalizada}')]"
                     opcao = self.wait.until(
                         EC.element_to_be_clickable((By.XPATH, xpath_opcao))
                     )
                     opcao.click()
             else:
-                # Busca pelo texto
                 xpath_opcao = f"//ul[@id='ComboCidade']//li[contains(text(), '{cidade_normalizada}')]"
                 opcao = self.wait.until(
                     EC.element_to_be_clickable((By.XPATH, xpath_opcao))
@@ -337,7 +410,15 @@ class CIEEScraper:
         try:
             print(f"\n🔹 Clicando no botão 'Aplicar'...")
 
-            # Procura pelo botão "Aplicar" usando a classe correta
+            # Localiza o botão
+            botao_aplicar = self.wait.until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "div.btn-search.btn-purple"))
+            )
+
+            # Rola até o botão
+            self._scroll_to_element(botao_aplicar)
+
+            # Aguarda ficar clicável e clica
             botao_aplicar = self.wait.until(
                 EC.element_to_be_clickable((By.CSS_SELECTOR, "div.btn-search.btn-purple"))
             )
@@ -361,10 +442,8 @@ class CIEEScraper:
         vagas = []
 
         try:
-            # Aguarda os cards carregarem - vários seletores possíveis
             time.sleep(3)
 
-            # Tenta diferentes seletores para encontrar as vagas
             seletores = [
                 "a.vaga-item",
                 ".vaga-row",
@@ -388,19 +467,16 @@ class CIEEScraper:
                 print("❌ Nenhuma vaga encontrada com os seletores testados")
                 print("🔍 Tentando seletor genérico...")
 
-                # Última tentativa: qualquer link que contenha informações de vaga
                 cards_vagas = self.driver.find_elements(By.TAG_NAME, "a")
                 cards_vagas = [c for c in cards_vagas if
                                'vaga' in c.get_attribute('class').lower() or 'codigoVaga' in c.get_attribute('href')]
 
             print(f"✅ {len(cards_vagas)} vagas encontradas!\n")
 
-            # Extrai dados de cada vaga
             for index, card in enumerate(cards_vagas, 1):
                 print(f"📄 Extraindo vaga {index}/{len(cards_vagas)}...")
                 vaga = self._extrair_dados_vaga(card)
 
-                # Só adiciona se tiver pelo menos o código ou link
                 if (vaga['codigo'] and vaga['codigo'] != 'N/A') or (vaga['link'] and vaga['link'] != 'N/A'):
                     vagas.append(vaga)
                 else:
@@ -435,7 +511,6 @@ class CIEEScraper:
         }
 
         try:
-            # Link da vaga (pega primeiro)
             try:
                 link_href = elemento.get_attribute('href')
                 if link_href:
@@ -445,49 +520,42 @@ class CIEEScraper:
             except:
                 vaga['link'] = 'N/A'
 
-            # Código da vaga
             try:
                 codigo_elem = elemento.find_element(By.CSS_SELECTOR, ".codigo-vaga, .cod-vaga")
                 vaga['codigo'] = codigo_elem.text.strip()
             except:
                 vaga['codigo'] = 'N/A'
 
-            # Tipo da vaga
             try:
                 tipo_elem = elemento.find_element(By.CSS_SELECTOR, ".tipo-vaga, .badge")
                 vaga['tipo'] = tipo_elem.text.strip()
             except:
                 vaga['tipo'] = 'N/A'
 
-            # Descrição/Título da vaga
             try:
                 desc_elem = elemento.find_element(By.CSS_SELECTOR, ".titulo-vaga, .descricao, h3")
                 vaga['descricao'] = desc_elem.text.strip()
             except:
                 vaga['descricao'] = 'N/A'
 
-            # Área profissional
             try:
                 area_elem = elemento.find_element(By.CSS_SELECTOR, ".area-vaga, .info-area")
                 vaga['area'] = area_elem.text.strip()
             except:
                 vaga['area'] = 'N/A'
 
-            # Localização
             try:
                 local_elem = elemento.find_element(By.CSS_SELECTOR, ".local-vaga, .info-local, .localizacao")
                 vaga['localizacao'] = local_elem.text.strip()
             except:
                 vaga['localizacao'] = 'N/A'
 
-            # Horário
             try:
                 horario_elem = elemento.find_element(By.CSS_SELECTOR, ".horario-vaga, .info-horario")
                 vaga['horario'] = horario_elem.text.strip()
             except:
                 vaga['horario'] = 'N/A'
 
-            # Salário/Bolsa
             try:
                 salario_elem = elemento.find_element(By.CSS_SELECTOR, ".salario-vaga, .info-salario, .bolsa-auxilio")
                 vaga['salario'] = salario_elem.text.strip()
@@ -515,10 +583,6 @@ class CIEEScraper:
                 json.dump(vagas, f, ensure_ascii=False, indent=4)
             print(f"\n💾 Resultados salvos em: {arquivo}")
 
-        elif formato == 'csv':
-            # TODO: Implementar CSV se necessário
-            pass
-
     def fechar(self):
         """Fecha o navegador"""
         if self.driver:
@@ -531,31 +595,27 @@ def main():
 
     # CONFIGURE SEUS FILTROS AQUI
     filtros = {
-        'tipo_vaga': 'ESTÁGIO',  # ESTÁGIO, APRENDIZ, PCD
-        'nivel_ensino': 'Superior',  # Superior, Técnico, Médio
-        'area_profissional': 'Informática',  # Informática, Administração, etc
+        'tipo_vaga': 'ESTÁGIO',
+        'nivel_ensino': 'Superior',
+        'area_profissional': 'INFORMÁTICA',
         'cidade': 'BRASÍLIA - DF'
     }
 
     scraper = CIEEScraper(headless=False)
 
     try:
-        # Executa o scraper
         scraper.inicializar_driver()
         scraper.acessar_site()
         scraper.aplicar_filtros(filtros)
         vagas = scraper.buscar_vagas()
 
-        # Mostra resumo
         print("\n" + "=" * 50)
         print(f"TOTAL: {len(vagas)} vagas encontradas!")
         print("=" * 50)
 
-        # Salva em JSON
         if vagas:
             scraper.salvar_resultados(vagas, formato='json')
 
-            # Mostra as 3 primeiras vagas
             print("\n📋 Primeiras vagas:")
             for i, vaga in enumerate(vagas[:3], 1):
                 print(f"\n  {i}. {vaga['tipo']} - {vaga['descricao']}")
